@@ -1,0 +1,6 @@
+pg-data/
+rabbitmq-data/
+__pycache__/
+*.pyc
+*.log
+app/.env
