@@ -1,2 +1,36 @@
+# ---- Python cache ----
+__pycache__/
+*.py[cod]
+*$py.class
+
+# ---- Virtual env ----
+.venv/
+venv/
+ENV/
+env/
+
+# ---- Build / dist ----
+build/
+dist/
+*.egg-info/
+
+# ---- Test / coverage ----
+.pytest_cache/
+.coverage
+htmlcov/
+
+# ---- IDE ----
+.vscode/
+.idea/
+
+# ---- OS ----
+.DS_Store
+Thumbs.db
+
+# ---- Project secrets ----
 app/.env
 database.env
+
+# ---- Local runtime data (если вдруг появятся) ----
+pg-data/
+rabbitmq-data/
