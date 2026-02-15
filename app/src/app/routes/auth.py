@@ -1,37 +1,35 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from __future__ import annotations
+
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from app.core.security import verify_password, create_access_token
 from app.infrastructure.db.session import get_session
-from app.schemas.auth import RegisterRequest, LoginRequest, AuthResponse
-
-# Используем CRUD-функции:
-# - create_user(session, email, password_hash)
-# - get_user_by_email(session, email)
-from app.services.crud.users import get_user_by_email, create_user
+from app.schemas.auth import RegisterIn, LoginIn, TokenOut
+from app.services.crud.users import create_user, get_user_by_email
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
-@router.post("/register")
-def register(payload: RegisterRequest, session: Session = Depends(get_session)) -> dict:
-    existing = get_user_by_email(session, payload.email)
-    if existing is not None:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="User already exists")
+@router.post("/register", response_model=TokenOut)
+def register(payload: RegisterIn, db: Session = Depends(get_session)):
+    existing = get_user_by_email(db, payload.email)
+    if existing:
+        raise HTTPException(status_code=409, detail="Email already registered")
 
-    # УЧЕБНО: храним password как есть нельзя, но JWT позже.
-    # Сейчас можно сделать примитивный hash
-    user = create_user(session, email=payload.email, password=payload.password)
-    return {"id": str(user.id), "email": user.email}
+    user = create_user(db, email=payload.email, password=payload.password, role="USER")
+    token = create_access_token({"sub": user.id, "role": user.role})
+    return TokenOut(access_token=token)
 
 
-@router.post("/login", response_model=AuthResponse)
-def login(payload: LoginRequest, session: Session = Depends(get_session)) -> AuthResponse:
-    user = get_user_by_email(session, payload.email)
-    if user is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+@router.post("/login", response_model=TokenOut)
+def login(payload: LoginIn, db: Session = Depends(get_session)):
+    user = get_user_by_email(db, payload.email)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid credentials")
 
-    # Подстройка под реализацию:
-    if not user.verify_password(payload.password):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+    if not verify_password(payload.password, user.password_hash):
+        raise HTTPException(status_code=401, detail="Invalid credentials")
 
-    return AuthResponse(token=f"user:{user.id}")
+    token = create_access_token({"sub": user.id, "role": user.role})
+    return TokenOut(access_token=token)

@@ -3,12 +3,15 @@ from __future__ import annotations
 from sqlalchemy.orm import Session
 from sqlalchemy import select
 
+from app.core.security import hash_password
 from app.infrastructure.db.orm_models import UserORM, WalletORM
 
 
-def create_user(db: Session, email: str, password_hash: str, role: str = "USER") -> UserORM:
-    user = UserORM(email=email, password_hash=password_hash, role=role)
+def create_user(db: Session, email: str, password: str, role: str = "USER") -> UserORM:
+    # хэшируем пароль при сохранении (замечание №5)
+    user = UserORM(email=email, password_hash=hash_password(password), role=role)
     user.wallet = WalletORM(balance=0)
+
     db.add(user)
     db.commit()
     db.refresh(user)

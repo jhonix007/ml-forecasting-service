@@ -6,36 +6,39 @@ from fastapi import Depends, Header, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.security import decode_token
 from app.infrastructure.db.orm_models import UserORM
 from app.infrastructure.db.session import get_session
 
 
-def get_db() -> Session:
-    # alias для совместимости со старыми роутами
-    return next(get_session())
-
-
 def get_current_user_dep(
     db: Session = Depends(get_session),
-    x_user_id: str | None = Header(default=None, alias="X-User-Id"),
+    authorization: str | None = Header(default=None, alias="Authorization"),
 ) -> UserORM:
     """
-    Минимальная auth-зависимость для MVP:
-    - если передали X-User-Id => ищем пользователя по id
-    - иначе берём demo@local
+    Authorization: Bearer <jwt>
+    В токене ожидаем payload {"sub": "<user_id>", ...}
     """
-    if x_user_id:
-        user = db.scalar(select(UserORM).where(UserORM.id == x_user_id))
-    else:
-        user = db.scalar(select(UserORM).where(UserORM.email == "demo@local"))
+    if not authorization or not authorization.lower().startswith("bearer "):
+        raise HTTPException(status_code=401, detail="Missing bearer token")
 
+    token = authorization.split(" ", 1)[1].strip()
+    try:
+        payload = decode_token(token)
+    except ValueError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    user_id = payload.get("sub")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Invalid token payload")
+
+    user = db.scalar(select(UserORM).where(UserORM.id == user_id))
     if not user:
         raise HTTPException(status_code=401, detail="User not found / unauthorized")
 
     return user
 
 
-# чтобы predict/history могли импортировать `get_current_user`
 def get_current_user(user: UserORM = Depends(get_current_user_dep)) -> UserORM:
     return user
 

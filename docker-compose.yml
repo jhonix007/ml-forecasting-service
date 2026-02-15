@@ -11,11 +11,13 @@ services:
       database:
         condition: service_healthy
       rabbitmq:
-        condition: service_started
+        condition: service_healthy
     restart: on-failure
     networks:
       - backend
-
+    ports:
+      - "8000:8000"
+  
   web-proxy:
     build:
       context: ./web-proxy
@@ -25,33 +27,47 @@ services:
     ports:
       - "80:80"
       - "443:443"
+    restart: on-failure
     networks:
       - backend
 
   rabbitmq:
     image: rabbitmq:3-management
+    environment:
+      RABBITMQ_DEFAULT_USER: "${RABBITMQ_USER:-guest}"
+      RABBITMQ_DEFAULT_PASS: "${RABBITMQ_PASSWORD:-guest}"
     ports:
       - "5672:5672"
       - "15672:15672"
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
     restart: on-failure
+    healthcheck:
+      test: ["CMD-SHELL", "rabbitmq-diagnostics -q ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
     networks:
       - backend
 
   database:
     image: postgres:16
-    env_file:
-      - ./database.env
+    environment:
+      POSTGRES_DB: "${DB_NAME:-app_db}"
+      POSTGRES_USER: "${DB_USER:-app_user}"
+      POSTGRES_PASSWORD: "${DB_PASSWORD:-app_pass}"
+    ports:
+      - "${DB_PORT:-5432}:5432"
     volumes:
       - pg_data:/var/lib/postgresql/data
-    networks:
-      - backend
+    restart: on-failure
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
       timeout: 3s
-      retries: 10
+      retries: 20
+    networks:
+      - backend
 
 networks:
   backend:

@@ -1,8 +1,6 @@
 from app.domain.value_objects import ForecastRequest, ForecastResult
 
 class BaselineForecastEngine:
-    """Простой baseline: повторяем последнее значение horizon раз."""
-
-    def forecast(self, req: ForecastRequest) -> ForecastResult:
-        last = req.values[-1]
-        return ForecastResult(forecast=[last] * req.horizon)
+    def forecast(self, values: list[float], horizon: int) -> list[float]:
+        last = float(values[-1])
+        return [last] * horizon
