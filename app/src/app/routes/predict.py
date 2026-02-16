@@ -15,6 +15,11 @@ from app.schemas.predict import PredictIn, PredictOut, InvalidRowSchema
 from app.services.crud.wallet import charge, InsufficientBalanceError
 from app.ml.validators import BasicNumericValidator
 from app.ml.engines import BaselineForecastEngine
+from app.schemas.tasks import PredictAsyncIn, PredictAsyncOut
+from app.services.crud.tasks import create_task
+from app.infrastructure.mq.publisher import publish_task
+
+
 
 router = APIRouter(prefix="/predict", tags=["predict"])
 logger = logging.getLogger(__name__)
@@ -47,6 +52,41 @@ def _call_forecast(engine: BaselineForecastEngine, values: list[float], horizon:
         return [0.0] * horizon
     last = float(forecast[-1])
     return forecast + [last] * (horizon - len(forecast))
+
+
+
+@router.post("", response_model=PredictAsyncOut)
+def predict_async(payload: PredictAsyncIn, db: Session = Depends(get_session), user=Depends(get_current_user)):
+    task_id = str(uuid4())
+
+    # 1) создаём задачу в БД со статусом PENDING
+    create_task(
+        db,
+        task_id=task_id,
+        user_id=str(user.id),
+        model=payload.model,
+        features=payload.features,
+    )
+
+    # 2) публикуем в RabbitMQ
+    msg = {
+        "task_id": task_id,
+        "features": payload.features,
+        "model": payload.model,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "user_id": str(user.id),
+    }
+
+    try:
+        publish_task(msg)
+    except Exception as e:
+        # можно обновить задачу в FAILED, но минимум — вернуть ошибку
+        raise HTTPException(status_code=500, detail=f"Publish failed: {e}")
+
+    # 3) возвращаем task_id
+    return PredictAsyncOut(task_id=task_id)
+
+
 
 
 @router.post("", response_model=PredictOut)

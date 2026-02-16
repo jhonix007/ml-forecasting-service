@@ -23,6 +23,8 @@ ORM-модели (таблицы) проекта.
 
 from datetime import datetime
 from uuid import uuid4
+from datetime import datetime, timezone
+
 
 from sqlalchemy import (
     String,
@@ -30,7 +32,10 @@ from sqlalchemy import (
     Integer,
     Boolean,
     ForeignKey,
+    Float,
+    JSON,
     UniqueConstraint,
+    Column,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -157,3 +162,19 @@ class PredictionORM(Base):
     credits_spent: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=now_utc)
+
+class MLTaskORM(Base):
+    __tablename__ = "ml_tasks"
+
+    id = Column(String, primary_key=True)                 # task_id (uuid string)
+    user_id = Column(String, nullable=False, index=True)
+    model = Column(String, nullable=False)
+    features = Column(JSON, nullable=False)               # входные данные
+
+    status = Column(String, nullable=False, default="PENDING")  # PENDING/SUCCESS/FAILED
+    prediction = Column(Float, nullable=True)
+    worker_id = Column(String, nullable=True)
+    error = Column(String, nullable=True)
+
+    created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))

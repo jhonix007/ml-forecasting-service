@@ -21,7 +21,7 @@ from sqlalchemy.orm import sessionmaker, Session
 
 
 def _build_database_url() -> str:
-    database_url = os.getenv("DATABASE_URL")
+    database_url = os.getenv("DATABASE_URL") or os.getenv("DB_URL")
     if database_url:
         return database_url
 
