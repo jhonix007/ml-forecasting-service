@@ -1,1 +1,1 @@
-# package marker
+# маркер пакета

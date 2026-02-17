@@ -6,7 +6,7 @@ from email_validator import validate_email, EmailNotValidError
 
 class RegisterIn(BaseModel):
     email: str = Field(min_length=3, max_length=255)
-    # ВАЖНО: bcrypt лимит 72 bytes => ставим max_length <= 72 (по символам)
+    # ВАЖНО: лимит хеширования 72 байта, поэтому ограничиваем длину пароля 72 символами
     password: str = Field(min_length=6, max_length=72)
 
     @field_validator("email")

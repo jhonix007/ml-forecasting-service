@@ -1,29 +1,31 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Literal, Optional
+from typing import Optional
 from uuid import UUID
 
 from pydantic import BaseModel, Field
 
 
-TaskStatus = Literal["PENDING", "SUCCESS", "FAILED"]
+class TaskFeatures(BaseModel):
+    series: list[float] = Field(min_length=1)
+    horizon: int = Field(gt=0, le=1000)
 
 
-class PredictTaskIn(BaseModel):
-    model: str = Field(..., examples=["demo_model"])
-    features: dict[str, Any] = Field(..., examples=[{"x1": 1.2, "x2": 5.7}])
+class TaskCreateIn(BaseModel):
+    model: str = Field(min_length=1, max_length=100, examples=["hf-timeseries"])
+    features: TaskFeatures
+    timestamp: Optional[datetime] = None
 
 
-class PredictTaskOut(BaseModel):
+class TaskCreateOut(BaseModel):
     task_id: UUID
 
 
 class TaskStatusOut(BaseModel):
     task_id: UUID
-    status: TaskStatus
-    prediction: Optional[float] = None
+    status: str
     worker_id: Optional[str] = None
+    prediction: Optional[list[float]] = None
     error: Optional[str] = None
-    created_at: datetime
-    updated_at: datetime
+    created_at: Optional[datetime] = None

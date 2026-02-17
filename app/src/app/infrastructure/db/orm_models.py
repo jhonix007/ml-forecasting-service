@@ -21,9 +21,8 @@ ORM-модели (таблицы) проекта.
 - transactions (история пополнений/списаний)
 """
 
-from datetime import datetime
-from uuid import uuid4
 from datetime import datetime, timezone
+from uuid import uuid4
 
 
 from sqlalchemy import (
@@ -67,7 +66,7 @@ class UserORM(Base):
         cascade="all, delete-orphan",
     )
 
-    # 1:N — история транзакций
+    # 1-к-многим — история транзакций
     transactions: Mapped[list["TransactionORM"]] = relationship(
         back_populates="user",
         cascade="all, delete-orphan",
@@ -163,18 +162,20 @@ class PredictionORM(Base):
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=now_utc)
 
+
 class MLTaskORM(Base):
-    __tablename__ = "ml_tasks"
+    """
+    Результаты асинхронных ML-задач (RabbitMQ workers).
 
-    id = Column(String, primary_key=True)                 # task_id (uuid string)
-    user_id = Column(String, nullable=False, index=True)
+    Используется уроком 05: app кладёт PENDING, воркеры пишут SUCCESS/FAILED.
+    """
+
+    __tablename__ = "ml_task_results"
+
+    task_id = Column(String, primary_key=True)  # task_id (uuid string)
     model = Column(String, nullable=False)
-    features = Column(JSON, nullable=False)               # входные данные
-
-    status = Column(String, nullable=False, default="PENDING")  # PENDING/SUCCESS/FAILED
-    prediction = Column(Float, nullable=True)
+    prediction = Column(JSON, nullable=True)  # jsonb в Postgres
     worker_id = Column(String, nullable=True)
+    status = Column(String, nullable=False, default="PENDING")  # PENDING/SUCCESS/FAILED
     error = Column(String, nullable=True)
-
     created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))

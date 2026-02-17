@@ -20,7 +20,7 @@ from app.infrastructure.db.orm_models import UserORM, WalletORM, MLModelORM
 
 
 def seed_data(db: Session) -> None:
-    # --- demo user
+    # --- демо-пользователь
     demo_email = "demo@local"
     user = db.scalar(select(UserORM).where(UserORM.email == demo_email))
     if not user:
@@ -28,7 +28,7 @@ def seed_data(db: Session) -> None:
         user.wallet = WalletORM(balance=1000)  # стартовый баланс демо пользователя
         db.add(user)
 
-    # --- demo admin
+    # --- демо-админ
     admin_email = "admin@local"
     admin = db.scalar(select(UserORM).where(UserORM.email == admin_email))
     if not admin:
@@ -36,7 +36,7 @@ def seed_data(db: Session) -> None:
         admin.wallet = WalletORM(balance=5000)
         db.add(admin)
 
-    # --- базовые ML модели
+    # --- базовые модели машинного обучения
     base_models = [
         ("BaselineForecastEngine", "0.1"),
         ("TimesFM", "2.0"),

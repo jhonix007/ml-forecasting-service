@@ -44,13 +44,19 @@ services:
 
   worker:
     build:
-      context: ./app
+      context: ./worker
       dockerfile: Dockerfile
-    command: python -m workers.ml_worker
-    env_file:
-      - ./app/.env
+    command: python -u ml_worker.py
     environment:
       LOG_LEVEL: INFO
+      RABBIT_HOST: rabbitmq
+      RABBIT_PORT: "5672"
+      RABBIT_USER: guest
+      RABBIT_PASS: guest
+      RABBIT_QUEUE: ml_tasks
+      DB_URL: "postgresql+psycopg2://postgres:postgres@database:5432/postgres"
+      HF_MODEL_ID: "huggingface/time-series-transformer-tourism-monthly"
+      HF_DEVICE: "cpu"
     depends_on:
       rabbitmq:
         condition: service_healthy

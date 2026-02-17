@@ -25,14 +25,14 @@ def _get_env(*names: str, default: str | None = None) -> str | None:
     return default
 
 
-# RabbitMQ
+# Настройки брокера сообщений
 RABBIT_HOST = _get_env("RABBIT_HOST", "RABBITMQ_HOST", default="rabbitmq")
 RABBIT_PORT = int(_get_env("RABBIT_PORT", "RABBITMQ_PORT", default="5672"))
 RABBIT_USER = _get_env("RABBIT_USER", "RABBITMQ_USER", default="guest")
 RABBIT_PASS = _get_env("RABBIT_PASS", "RABBITMQ_PASSWORD", default="guest")
 RABBIT_QUEUE = _get_env("RABBIT_QUEUE", "RABBITMQ_QUEUE", default="ml_tasks")
 
-# Worker identity
+# Идентификатор воркера
 WORKER_ID = os.getenv("WORKER_ID") or socket.gethostname()
 
 def _build_db_url() -> str | None:
@@ -52,7 +52,7 @@ def _build_db_url() -> str | None:
     return f"postgresql+psycopg2://{user}:{password}@{host}:{port}/{name}"
 
 
-# DB (для записи результата). Если DB_URL не задан — будем просто логировать.
+# БД (для записи результата). Если строка подключения не задана — будем просто логировать.
 DB_URL = _build_db_url()  # пример: postgresql+psycopg2://postgres:postgres@database:5432/postgres
 
 
@@ -172,10 +172,10 @@ def main() -> None:
             conn = pika.BlockingConnection(params)
             ch: BlockingChannel = conn.channel()
 
-            # очередь одна, durable
+            # очередь одна, устойчивая
             ch.queue_declare(queue=RABBIT_QUEUE, durable=True)
 
-            # важно для round-robin между воркерами: один воркер = одна задача за раз
+            # важно для распределения по кругу между воркерами: один воркер = одна задача за раз
             ch.basic_qos(prefetch_count=1)
 
             logger.info("[%s] Connected to RabbitMQ, queue='%s'. Waiting...", WORKER_ID, RABBIT_QUEUE)

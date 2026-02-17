@@ -1,0 +1,6 @@
+pika
+SQLAlchemy
+psycopg2-binary
+pydantic
+transformers==4.38.2
+numpy

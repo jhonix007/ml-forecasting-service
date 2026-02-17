@@ -39,7 +39,7 @@ def charge_wallet(db: Session, user_id: str, amount: int, comment: str = "") -> 
     return wallet.balance
 
 
-# --- backward compatible aliases (чтобы не падали импорты в роутерах)
+# --- обратная совместимость (чтобы не падали импорты в роутерах)
 def top_up(db: Session, user_id: str, amount: int, comment: str = "") -> int:
     return top_up_wallet(db, user_id, amount, comment)
 

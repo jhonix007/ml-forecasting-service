@@ -19,11 +19,10 @@ def get_task(task_id: UUID, db: Session = Depends(get_session)) -> TaskStatusOut
         raise HTTPException(status_code=404, detail="Task not found")
 
     return TaskStatusOut(
-        task_id=UUID(task.id),
+        task_id=UUID(task.task_id),
         status=task.status,
         prediction=task.prediction,
         worker_id=task.worker_id,
         error=task.error,
         created_at=task.created_at,
-        updated_at=task.updated_at,
     )
