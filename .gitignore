@@ -223,3 +223,8 @@ database.env
 pg-data/
 rabbitmq-data/ml-forecasting-service.zip
 ml-forecasting-service.zip
+
+# ---- Frontend (web) ----
+web/node_modules/
+web/dist/
+web/.vite/

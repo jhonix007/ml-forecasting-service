@@ -3,7 +3,8 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.core.security import verify_password, create_access_token
+from app.auth.hash_password import verify_password
+from app.auth.jwt_handler import create_access_token
 from app.infrastructure.db.session import get_session
 from app.schemas.auth import RegisterIn, LoginIn, TokenOut
 from app.services.crud.users import create_user, get_user_by_email

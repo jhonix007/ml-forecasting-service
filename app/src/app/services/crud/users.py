@@ -3,7 +3,7 @@ from __future__ import annotations
 from sqlalchemy.orm import Session
 from sqlalchemy import select
 
-from app.core.security import hash_password
+from app.auth.hash_password import hash_password
 from app.infrastructure.db.orm_models import UserORM, WalletORM
 
 

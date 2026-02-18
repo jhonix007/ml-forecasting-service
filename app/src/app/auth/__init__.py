@@ -1,7 +1,3 @@
-from __future__ import annotations
-
-# Backward compatibility layer.
-# Реальная реализация перенесена в app.auth.*
 from app.auth.hash_password import hash_password, verify_password
 from app.auth.jwt_handler import (
     JWT_ALG,
@@ -10,6 +6,7 @@ from app.auth.jwt_handler import (
     create_access_token,
     decode_token,
 )
+from app.auth.authenticate import get_current_user, get_current_user_dep, get_current_user_id
 
 __all__ = [
     "hash_password",
@@ -19,4 +16,7 @@ __all__ = [
     "JWT_SECRET",
     "JWT_ALG",
     "JWT_EXPIRE_MINUTES",
+    "get_current_user",
+    "get_current_user_dep",
+    "get_current_user_id",
 ]

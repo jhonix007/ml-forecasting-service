@@ -25,6 +25,7 @@ class TaskCreateOut(BaseModel):
 class TaskStatusOut(BaseModel):
     task_id: UUID
     status: str
+    model: Optional[str] = None
     worker_id: Optional[str] = None
     prediction: Optional[list[float]] = None
     error: Optional[str] = None

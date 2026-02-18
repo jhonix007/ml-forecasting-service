@@ -172,6 +172,7 @@ class MLTaskORM(Base):
     __tablename__ = "ml_task_results"
 
     task_id: Mapped[str] = mapped_column(String, primary_key=True)  # task_id (uuid string)
+    user_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id"), nullable=True)
     model: Mapped[str] = mapped_column(String, nullable=False)
     prediction: Mapped[dict | list | None] = mapped_column(JSON, nullable=True)  # jsonb в Postgres
     worker_id: Mapped[str | None] = mapped_column(String, nullable=True)
