@@ -11,7 +11,11 @@ from uuid import UUID
 
 import pika
 from pika.adapters.blocking_connection import BlockingChannel
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+
+from app.infrastructure.db.base import Base
+from app.infrastructure.db.orm_models import MLTaskORM
 
 logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"))
 logger = logging.getLogger("ml-worker")
@@ -34,6 +38,7 @@ RABBIT_QUEUE = _get_env("RABBIT_QUEUE", "RABBITMQ_QUEUE", default="ml_tasks")
 
 # Идентификатор воркера
 WORKER_ID = os.getenv("WORKER_ID") or socket.gethostname()
+
 
 def _build_db_url() -> str | None:
     db_url = _get_env("DB_URL", "DATABASE_URL")
@@ -88,49 +93,33 @@ def _predict_mock(features: dict[str, float]) -> float:
 
 
 def _init_db(engine) -> None:
-    """Создаём таблицу под результаты (самый простой способ выполнить 'записать результат')."""
-    ddl = """
-    CREATE TABLE IF NOT EXISTS ml_task_results (
-        task_id      uuid PRIMARY KEY,
-        model        text NOT NULL,
-        features     jsonb NOT NULL,
-        prediction   double precision,
-        worker_id    text NOT NULL,
-        status       text NOT NULL,
-        error        text,
-        created_at   timestamptz NOT NULL
-    );
-    """
-    with engine.begin() as conn:
-        conn.execute(text(ddl))
+    Base.metadata.create_all(engine)
 
 
-def _save_result_db(engine, result: dict[str, Any]) -> None:
-    q = """
-    INSERT INTO ml_task_results (task_id, model, features, prediction, worker_id, status, error, created_at)
-    VALUES (CAST(:task_id AS uuid), :model, CAST(:features AS jsonb), :prediction, :worker_id, :status, :error, :created_at)
-    ON CONFLICT (task_id) DO UPDATE SET
-        prediction = EXCLUDED.prediction,
-        worker_id  = EXCLUDED.worker_id,
-        status     = EXCLUDED.status,
-        error      = EXCLUDED.error,
-        created_at = EXCLUDED.created_at;
-    """
-    params = {
-        "task_id": result["task_id"],
-        "model": result["model"],
-        "features": json.dumps(result["features"], ensure_ascii=False),
-        "prediction": result.get("prediction"),
-        "worker_id": result["worker_id"],
-        "status": result["status"],
-        "error": result.get("error"),
-        "created_at": result["created_at"],
-    }
-    with engine.begin() as conn:
-        conn.execute(text(q), params)
+def _save_result_db(session_factory, result: dict[str, Any]) -> None:
+    with session_factory() as db:
+        task = db.get(MLTaskORM, result["task_id"])
+        if task is None:
+            task = MLTaskORM(
+                task_id=result["task_id"],
+                model=result["model"],
+                created_at=result["created_at"],
+            )
+            db.add(task)
+
+        task.model = result["model"]
+        task.prediction = result.get("prediction")
+        task.worker_id = result["worker_id"]
+        task.status = result["status"]
+        task.error = result.get("error")
+
+        if task.created_at is None:
+            task.created_at = result["created_at"]
+
+        db.commit()
 
 
-def _handle_message(engine, body: bytes) -> dict[str, Any]:
+def _handle_message(body: bytes) -> dict[str, Any]:
     payload = json.loads(body.decode("utf-8"))
     task_id, features, model = _validate_task(payload)
 
@@ -140,20 +129,21 @@ def _handle_message(engine, body: bytes) -> dict[str, Any]:
     return {
         "task_id": task_id,
         "model": model,
-        "features": features,
         "prediction": y,
         "worker_id": WORKER_ID,
-        "status": "success",
+        "status": "SUCCESS",
         "error": None,
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": datetime.now(timezone.utc),
     }
 
 
 def main() -> None:
     engine = None
+    session_factory = None
     if DB_URL:
         engine = create_engine(DB_URL, pool_pre_ping=True)
         _init_db(engine)
+        session_factory = sessionmaker(bind=engine, autocommit=False, autoflush=False, future=True)
         logger.info("[%s] DB enabled", WORKER_ID)
     else:
         logger.warning("[%s] DB_URL not set -> results will NOT be persisted", WORKER_ID)
@@ -182,37 +172,35 @@ def main() -> None:
 
             def on_message(channel: BlockingChannel, method, properties, body: bytes):
                 try:
-                    result = _handle_message(engine, body)
+                    result = _handle_message(body)
 
                     logger.info("[%s] DONE task=%s pred=%s", WORKER_ID, result["task_id"], result["prediction"])
 
-                    if engine is not None:
-                        _save_result_db(engine, result)
+                    if session_factory is not None:
+                        _save_result_db(session_factory, result)
 
                     channel.basic_ack(delivery_tag=method.delivery_tag)
 
                 except Exception as e:
                     logger.exception("[%s] FAIL: %s", WORKER_ID, e)
 
-                    # сохраняем ошибку в БД (если есть)
-                    if engine is not None:
+                    if session_factory is not None:
                         try:
                             bad = json.loads(body.decode("utf-8"))
-                            task_id = str(bad.get("task_id") or "00000000-0000-0000-0000-000000000000")
+                            task_id = str(bad.get("task_id") or "invalid-task")
                         except Exception:
-                            task_id = "00000000-0000-0000-0000-000000000000"
+                            task_id = "invalid-task"
 
                         fail_result = {
                             "task_id": task_id,
                             "model": str((bad or {}).get("model") or "unknown"),
-                            "features": (bad or {}).get("features") or {},
                             "prediction": None,
                             "worker_id": WORKER_ID,
-                            "status": "failed",
-                            "error": str(e),
-                            "created_at": datetime.now(timezone.utc).isoformat(),
+                            "status": "FAILED",
+                            "error": str(e)[:500],
+                            "created_at": datetime.now(timezone.utc),
                         }
-                        _save_result_db(engine, fail_result)
+                        _save_result_db(session_factory, fail_result)
 
                     # чтобы не зациклиться на кривом сообщении — не возвращаем в очередь
                     channel.basic_nack(delivery_tag=method.delivery_tag, requeue=False)

@@ -9,9 +9,12 @@ from datetime import datetime, timezone
 from uuid import UUID
 
 import pika
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
 
 from hf_model import HFTimeSeriesModel
+from app.infrastructure.db.base import Base
+from app.infrastructure.db.orm_models import MLTaskORM
 
 
 logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"))
@@ -31,42 +34,31 @@ if not DB_URL:
 WORKER_ID = os.getenv("WORKER_ID") or socket.gethostname()
 
 
-DDL = """
-CREATE TABLE IF NOT EXISTS ml_task_results (
-    task_id    text PRIMARY KEY,
-    model      text NOT NULL,
-    prediction jsonb,
-    worker_id  text,
-    status     text NOT NULL,
-    error      text,
-    created_at timestamptz NOT NULL
-);
-"""
-
-
-UPSERT = """
-INSERT INTO ml_task_results (task_id, model, prediction, worker_id, status, error, created_at)
-VALUES (:task_id, :model, CAST(:prediction AS jsonb), :worker_id, :status, :error, :created_at)
-ON CONFLICT (task_id) DO UPDATE SET
-    prediction = EXCLUDED.prediction,
-    worker_id  = EXCLUDED.worker_id,
-    status     = EXCLUDED.status,
-    error      = EXCLUDED.error,
-    created_at = EXCLUDED.created_at;
-"""
-
-
 def init_db(engine) -> None:
-    with engine.begin() as conn:
-        conn.execute(text(DDL))
+    Base.metadata.create_all(engine)
 
 
-def save_result(engine, result: dict) -> None:
-    payload = dict(result)
-    pred = payload.get("prediction")
-    payload["prediction"] = None if pred is None else json.dumps(pred)
-    with engine.begin() as conn:
-        conn.execute(text(UPSERT), payload)
+def save_result(session_factory, result: dict) -> None:
+    with session_factory() as db:
+        task = db.get(MLTaskORM, result["task_id"])
+        if task is None:
+            task = MLTaskORM(
+                task_id=result["task_id"],
+                model=result["model"],
+                created_at=result["created_at"],
+            )
+            db.add(task)
+
+        task.model = result["model"]
+        task.prediction = result["prediction"]
+        task.worker_id = result["worker_id"]
+        task.status = result["status"]
+        task.error = result["error"]
+
+        if task.created_at is None:
+            task.created_at = result["created_at"]
+
+        db.commit()
 
 
 def validate_message(payload: dict) -> tuple[str, str, list[float], int]:
@@ -97,6 +89,7 @@ def validate_message(payload: dict) -> tuple[str, str, list[float], int]:
 def main() -> None:
     engine = create_engine(DB_URL, pool_pre_ping=True, future=True)
     init_db(engine)
+    SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False, future=True)
 
     model = HFTimeSeriesModel()
     logger.info("[%s] HF model ready", WORKER_ID)
@@ -134,16 +127,15 @@ def main() -> None:
                         "worker_id": WORKER_ID,
                         "status": "SUCCESS",
                         "error": None,
-                        "created_at": datetime.now(timezone.utc).isoformat(),
+                        "created_at": datetime.now(timezone.utc),
                     }
-                    save_result(engine, result)
+                    save_result(SessionLocal, result)
                     logger.info("[%s] DONE task=%s", WORKER_ID, task_id)
 
                 except Exception as e:
                     logger.exception("[%s] FAIL: %s", WORKER_ID, e)
-                    task_id = None
                     try:
-                        task_id = str(payload.get("task_id"))
+                        task_id = str((payload or {}).get("task_id") or "invalid-task")
                     except Exception:
                         task_id = "invalid-task"
 
@@ -153,11 +145,11 @@ def main() -> None:
                         "prediction": None,
                         "worker_id": WORKER_ID,
                         "status": "FAILED",
-                        "error": str(e),
-                        "created_at": datetime.now(timezone.utc).isoformat(),
+                        "error": str(e)[:500],
+                        "created_at": datetime.now(timezone.utc),
                     }
                     try:
-                        save_result(engine, result)
+                        save_result(SessionLocal, result)
                     except Exception:
                         logger.exception("[%s] FAIL saving result", WORKER_ID)
                 finally:

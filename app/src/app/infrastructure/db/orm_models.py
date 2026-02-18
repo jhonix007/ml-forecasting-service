@@ -21,7 +21,7 @@ ORM-модели (таблицы) проекта.
 - transactions (история пополнений/списаний)
 """
 
-from datetime import datetime, timezone
+from datetime import datetime
 from uuid import uuid4
 
 
@@ -34,7 +34,6 @@ from sqlalchemy import (
     Float,
     JSON,
     UniqueConstraint,
-    Column,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -172,10 +171,10 @@ class MLTaskORM(Base):
 
     __tablename__ = "ml_task_results"
 
-    task_id = Column(String, primary_key=True)  # task_id (uuid string)
-    model = Column(String, nullable=False)
-    prediction = Column(JSON, nullable=True)  # jsonb в Postgres
-    worker_id = Column(String, nullable=True)
-    status = Column(String, nullable=False, default="PENDING")  # PENDING/SUCCESS/FAILED
-    error = Column(String, nullable=True)
-    created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+    task_id: Mapped[str] = mapped_column(String, primary_key=True)  # task_id (uuid string)
+    model: Mapped[str] = mapped_column(String, nullable=False)
+    prediction: Mapped[dict | list | None] = mapped_column(JSON, nullable=True)  # jsonb в Postgres
+    worker_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    status: Mapped[str] = mapped_column(String, nullable=False, default="PENDING")  # PENDING/SUCCESS/FAILED
+    error: Mapped[str | None] = mapped_column(String, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=now_utc)

@@ -85,7 +85,7 @@ docker compose exec database psql -U postgres -d postgres -c "select task_id, mo
 }
 ```
 
-Логи воркеров:
+## Логи воркеров
 ```powershell
 docker compose logs -f worker
 ```

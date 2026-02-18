@@ -48,6 +48,7 @@ services:
       dockerfile: Dockerfile
     command: python -u ml_worker.py
     environment:
+      PYTHONPATH: /opt/shared_app
       LOG_LEVEL: INFO
       RABBIT_HOST: rabbitmq
       RABBIT_PORT: "5672"
@@ -57,6 +58,8 @@ services:
       DB_URL: "postgresql+psycopg2://postgres:postgres@database:5432/postgres"
       HF_MODEL_ID: "huggingface/time-series-transformer-tourism-monthly"
       HF_DEVICE: "cpu"
+    volumes:
+      - ./app/src/app:/opt/shared_app/app:ro
     depends_on:
       rabbitmq:
         condition: service_healthy
