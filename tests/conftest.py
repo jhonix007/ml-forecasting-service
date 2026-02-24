@@ -58,6 +58,15 @@ def client():
 
 
 @pytest.fixture()
+def session():
+    db = TestingSessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+@pytest.fixture()
 def register_user(client):
     def _register(email: str = "user@example.com", password: str = "test123") -> dict[str, str]:
         response = client.post("/auth/register", json={"email": email, "password": password})
