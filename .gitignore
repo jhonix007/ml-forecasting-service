@@ -221,6 +221,8 @@ database.env
 
 # ---- Local runtime data (если вдруг появятся) ----
 pg-data/
+pg_data/
+rabbitmq_data/
 rabbitmq-data/ml-forecasting-service.zip
 ml-forecasting-service.zip
 
